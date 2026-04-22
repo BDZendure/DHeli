@@ -2,20 +2,60 @@ import 'server-only';
 import { query } from './db';
 import type { Hall, MealPeriod, MenuItem, Recipe } from './types';
 
+const HALL_META: Record<string, Omit<Hall, 'id'>> = {
+  parkside: {
+    name: 'Parkside Restaurant',
+    short_name: 'Parkside',
+    location: 'Parkside Complex',
+    active_meal_periods: ['breakfast', 'lunch', 'dinner', 'brunch'],
+    hours: {
+      weekday: { breakfast: '7:00–11:00 AM', lunch: '11:00 AM–4:00 PM', dinner: '4:00–10:00 PM' },
+      weekend: { brunch: '8:30 AM–4:00 PM', dinner: '4:00–10:00 PM' },
+    },
+  },
+  evk: {
+    name: "Everybody's Kitchen",
+    short_name: 'EVK',
+    location: 'McCarthy Quad',
+    active_meal_periods: ['breakfast', 'lunch', 'dinner', 'brunch'],
+    hours: {
+      weekday: { breakfast: '7:00–11:00 AM', lunch: '11:00 AM–4:00 PM', dinner: '4:00–10:00 PM' },
+      weekend: { brunch: '8:30 AM–4:00 PM', dinner: '4:00–10:00 PM' },
+    },
+  },
+  village: {
+    name: 'USC Village Dining Hall',
+    short_name: 'Village',
+    location: 'USC Village',
+    active_meal_periods: ['breakfast', 'lunch', 'dinner', 'brunch'],
+    hours: {
+      weekday: { breakfast: '7:00–11:00 AM', lunch: '11:00 AM–4:00 PM', dinner: '4:00–10:00 PM' },
+      weekend: { brunch: '8:30 AM–4:00 PM', dinner: '4:00–10:00 PM' },
+    },
+  },
+};
+
 export async function getHalls(): Promise<Hall[]> {
-  const { rows } = await query<Hall>(
-    `SELECT id, name, short_name, location, hours,
-            active_meal_periods::text[] AS active_meal_periods
-       FROM halls
-       ORDER BY name`,
+  const { rows } = await query<{ id: string; short_name: string }>(
+    `SELECT id, short_name FROM halls ORDER BY name`,
   );
-  return rows;
+  return rows
+    .map((r) => {
+      const meta = HALL_META[r.short_name.toLowerCase()];
+      return meta ? { id: r.id, ...meta } : null;
+    })
+    .filter((h): h is Hall => h !== null);
 }
 
 export async function getHallBySlug(slug: string): Promise<Hall | null> {
-  const target = slug.toLowerCase();
-  const all = await getHalls();
-  return all.find((h) => h.short_name.toLowerCase() === target) ?? null;
+  const meta = HALL_META[slug.toLowerCase()];
+  if (!meta) return null;
+  const { rows } = await query<{ id: string }>(
+    `SELECT id FROM halls WHERE LOWER(short_name) = $1`,
+    [slug.toLowerCase()],
+  );
+  if (rows.length === 0) return null;
+  return { id: rows[0].id, ...meta };
 }
 
 const VISIBILITY_THRESHOLD = 5;
