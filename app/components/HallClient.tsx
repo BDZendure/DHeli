@@ -40,6 +40,8 @@ export default function HallClient({
   const [items, setItems] = useState<MenuItem[]>(initialItems);
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
   const [modalRecipe, setModalRecipe] = useState<Recipe | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -66,7 +68,8 @@ export default function HallClient({
     return map;
   }, [items]);
 
-  const hallRecipes = initialRecipes.filter((r) => r.hall_id === hall.id).slice(0, 3);
+  const [recipes, setRecipes] = useState<Recipe[]>(initialRecipes);
+  const hallRecipes = recipes.filter((r) => r.hall_id === hall.id).slice(0, 3);
 
   const isOpen = isHallOpen(hall);
 
@@ -79,6 +82,34 @@ export default function HallClient({
         body: JSON.stringify({ menu_item_id: itemId, stars }),
       });
     });
+  };
+
+  const handleGenerate = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const r = await fetch('/api/recipes/generate?save=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hall_id: hall.id, meal_period: period }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setAiError(data?.error ?? 'Generation failed');
+        return;
+      }
+      const fresh = await fetch(`/api/recipes?hall=${hall.id}`, { cache: 'no-store' });
+      if (fresh.ok) {
+        const body = (await fresh.json()) as { recipes: Recipe[] };
+        setRecipes(body.recipes);
+        const created = body.recipes.find((x) => x.id === data.id);
+        if (created) setModalRecipe(created);
+      }
+    } catch (e) {
+      setAiError(String(e));
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   return (
@@ -157,10 +188,41 @@ export default function HallClient({
 
         <div className="hall-recipes-header">
           <div className="section-title">Recipes from {hall.short_name}</div>
-          <Link href="/recipes" className="see-all-btn">
-            See all →
-          </Link>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginRight: '30px' }}>
+            <button
+              className={`btn btn-ai ${aiLoading ? 'loading' : ''}`}
+              onClick={handleGenerate}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <>
+                  <span className="ai-dots">
+                    <span />
+                    <span />
+                    <span />
+                  </span>{' '}
+                  Generating…
+                </>
+              ) : (
+                <>✦ Generate Recipe</>
+              )}
+            </button>
+            <Link href="/recipes" className="see-all-btn">
+              See all →
+            </Link>
+          </div>
         </div>
+        {aiError && (
+          <div
+            style={{
+              color: 'var(--red)',
+              fontSize: '0.875rem',
+              marginBottom: '1rem',
+            }}
+          >
+            {aiError}
+          </div>
+        )}
         <div className="recipes-grid">
           {hallRecipes.length === 0 ? (
             <p
