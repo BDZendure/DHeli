@@ -10,7 +10,7 @@ export const pool: Pool =
   new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 1,
-    ssl: { rejectUnauthorized: true },
+    ssl: { rejectUnauthorized: false },
   });
 
 if (process.env.NODE_ENV !== 'production') {
