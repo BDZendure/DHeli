@@ -18,10 +18,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'menu_item_id required' }, { status: 400 });
   }
   const { rows } = await query<{ id: string; storage_path: string; created_at: string }>(
-    `SELECT id, storage_path, created_at
-       FROM menu_item_images
-      WHERE menu_item_id = $1
-      ORDER BY created_at DESC`,
+    `WITH target AS (
+       SELECT hall_id, name FROM menu_items WHERE id = $1
+     )
+     SELECT mii.id, mii.storage_path, mii.created_at
+       FROM menu_item_images mii
+       JOIN menu_items mi ON mi.id = mii.menu_item_id
+       JOIN target t ON mi.hall_id = t.hall_id AND mi.name = t.name
+      ORDER BY mii.created_at DESC`,
     [menuItemId],
   );
   return NextResponse.json(rows);
@@ -52,9 +56,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'menu item not found' }, { status: 404 });
   }
 
-  // Check image count limit
+  // Check image count limit (across all days for the same dish)
   const { rows: countRows } = await query<{ count: string }>(
-    'SELECT COUNT(*)::text AS count FROM menu_item_images WHERE menu_item_id = $1',
+    `WITH target AS (
+       SELECT hall_id, name FROM menu_items WHERE id = $1
+     )
+     SELECT COUNT(*)::text AS count
+       FROM menu_item_images mii
+       JOIN menu_items mi ON mi.id = mii.menu_item_id
+       JOIN target t ON mi.hall_id = t.hall_id AND mi.name = t.name`,
     [menu_item_id],
   );
   if (Number(countRows[0].count) >= MAX_IMAGES_PER_ITEM) {

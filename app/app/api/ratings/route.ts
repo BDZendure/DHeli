@@ -18,9 +18,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'menu_item_id required' }, { status: 400 });
   }
   const { rows } = await query<{ avg: string | null; count: string }>(
-    `SELECT ROUND(AVG(stars)::numeric, 2) AS avg,
+    `WITH target AS (
+       SELECT hall_id, name FROM menu_items WHERE id = $1
+     )
+     SELECT ROUND(AVG(r.stars)::numeric, 2) AS avg,
             COUNT(*)::text AS count
-       FROM ratings WHERE menu_item_id = $1`,
+       FROM ratings r
+       JOIN menu_items mi ON mi.id = r.menu_item_id
+       JOIN target t ON mi.hall_id = t.hall_id AND mi.name = t.name`,
     [id],
   );
   const row = rows[0];

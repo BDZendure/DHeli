@@ -75,17 +75,25 @@ export async function getMenu(
     thumbnail: string | null;
   }>(
     `SELECT mi.id, mi.name, mi.category, mi.dietary_tags,
-            ROUND(AVG(r.stars)::numeric, 2) AS avg_stars,
-            COUNT(r.id)::text AS rating_count,
+            rating_agg.avg_stars,
+            rating_agg.rating_count::text AS rating_count,
             latest_img.storage_path AS thumbnail
        FROM menu_items mi
-       LEFT JOIN ratings r ON r.menu_item_id = mi.id
        LEFT JOIN LATERAL (
-         SELECT storage_path FROM menu_item_images
-          WHERE menu_item_id = mi.id ORDER BY created_at DESC LIMIT 1
+         SELECT ROUND(AVG(r.stars)::numeric, 2) AS avg_stars,
+                COUNT(*) AS rating_count
+           FROM ratings r
+           JOIN menu_items mi2 ON mi2.id = r.menu_item_id
+          WHERE mi2.hall_id = mi.hall_id AND mi2.name = mi.name
+       ) rating_agg ON true
+       LEFT JOIN LATERAL (
+         SELECT mii.storage_path
+           FROM menu_item_images mii
+           JOIN menu_items mi2 ON mi2.id = mii.menu_item_id
+          WHERE mi2.hall_id = mi.hall_id AND mi2.name = mi.name
+          ORDER BY mii.created_at DESC LIMIT 1
        ) latest_img ON true
       WHERE mi.hall_id = $1 AND mi.date = $2 AND mi.meal_period = $3::meal_period
-      GROUP BY mi.id, latest_img.storage_path
       ORDER BY mi.category NULLS LAST, mi.name`,
     [hallId, date, period],
   );
