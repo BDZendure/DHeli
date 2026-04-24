@@ -4,8 +4,10 @@ import { useMemo, useState } from 'react';
 import RecipeCard from './RecipeCard';
 import RecipeModal from './RecipeModal';
 import PostRecipeModal, { PostRecipeInput } from './PostRecipeModal';
-import type { Hall, MealPeriod, Recipe } from '@/lib/types';
+import type { Hall, MealPeriod, Recipe, RecipeImage } from '@/lib/types';
 import { mealPeriodsForDate } from '@/lib/time';
+import { getSupabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/imageUtils';
 
 type Filter = 'all' | 'community' | 'ai' | string;
 
@@ -24,6 +26,7 @@ export default function RecipesClient({
   const [filter, setFilter] = useState<Filter>('all');
   const [modalRecipe, setModalRecipe] = useState<Recipe | null>(null);
   const [showPost, setShowPost] = useState(false);
+  const [modalRecipeImages, setModalRecipeImages] = useState<RecipeImage[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,7 +72,10 @@ export default function RecipesClient({
         const body = (await fresh.json()) as { recipes: Recipe[] };
         setRecipes(body.recipes);
         const created = body.recipes.find((x) => x.id === data.id);
-        if (created) setModalRecipe(created);
+        if (created) {
+          setModalRecipe(created);
+          setModalRecipeImages([]);
+        }
       }
     } catch (e) {
       setError(String(e));
@@ -108,6 +114,36 @@ export default function RecipesClient({
     }
   };
 
+  const handleRecipeClick = async (recipe: Recipe) => {
+    setModalRecipe(recipe);
+    try {
+      const r = await fetch(`/api/recipe-images?recipe_id=${recipe.id}`, { cache: 'no-store' });
+      if (r.ok) setModalRecipeImages(await r.json());
+      else setModalRecipeImages([]);
+    } catch {
+      setModalRecipeImages([]);
+    }
+  };
+
+  const handleRecipeImageUpload = async (file: File) => {
+    if (!modalRecipe) return;
+    const compressed = await compressImage(file);
+    const path = `recipes/${modalRecipe.id}/${crypto.randomUUID()}.webp`;
+    const supabase = getSupabase();
+    const { error: storageError } = await supabase.storage.from('menu-images').upload(path, compressed, {
+      contentType: 'image/webp',
+    });
+    if (storageError) throw new Error(`Storage upload failed: ${storageError.message}`);
+    const res = await fetch('/api/recipe-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipe_id: modalRecipe.id, storage_path: path }),
+    });
+    if (!res.ok) throw new Error('Failed to save image metadata');
+    const r = await fetch(`/api/recipe-images?recipe_id=${modalRecipe.id}`, { cache: 'no-store' });
+    if (r.ok) setModalRecipeImages(await r.json());
+  };
+
   const hallFilters = halls.map((h) => ({
     key: h.short_name.toLowerCase(),
     label: h.short_name,
@@ -119,8 +155,10 @@ export default function RecipesClient({
         <RecipeModal
           recipe={modalRecipe}
           hall={hallById.get(modalRecipe.hall_id)}
-          onClose={() => setModalRecipe(null)}
+          onClose={() => { setModalRecipe(null); setModalRecipeImages([]); }}
           onFlag={() => handleFlag(modalRecipe)}
+          images={modalRecipeImages}
+          onUpload={handleRecipeImageUpload}
         />
       )}
       {showPost && (
@@ -216,7 +254,7 @@ export default function RecipesClient({
                 key={r.id}
                 recipe={r}
                 hall={hallById.get(r.hall_id)}
-                onClick={() => setModalRecipe(r)}
+                onClick={() => handleRecipeClick(r)}
               />
             ))}
           </div>

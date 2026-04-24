@@ -26,10 +26,21 @@ export default function DishCard({
   return (
     <div className="dish-card" onClick={onClick} style={{ cursor: 'pointer' }}>
       <div className="dish-card-img">
-        <span>{item.name}</span>
-        <span style={{ opacity: 0.5, fontSize: '0.6rem', marginTop: '0.3rem' }}>
-          [food photo]
-        </span>
+        {item.thumbnail ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            className="dish-card-thumb"
+            src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/menu-images/${item.thumbnail}`}
+            alt={item.name}
+          />
+        ) : (
+          <>
+            <span>{item.name}</span>
+            <span style={{ opacity: 0.5, fontSize: '0.6rem', marginTop: '0.3rem' }}>
+              [food photo]
+            </span>
+          </>
+        )}
       </div>
       <div className="dish-card-body">
         <div className="dish-card-name">{item.name}</div>

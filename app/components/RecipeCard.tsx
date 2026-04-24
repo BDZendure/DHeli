@@ -27,9 +27,20 @@ export default function RecipeCard({
   return (
     <div className="recipe-card" onClick={onClick} role="button" tabIndex={0}>
       <div className="recipe-card-img">
-        {recipe.title}
-        <br />
-        <span style={{ opacity: 0.5, fontSize: '0.6rem' }}>[recipe photo]</span>
+        {recipe.thumbnail ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            className="recipe-card-thumb"
+            src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/menu-images/${recipe.thumbnail}`}
+            alt={recipe.title}
+          />
+        ) : (
+          <>
+            {recipe.title}
+            <br />
+            <span style={{ opacity: 0.5, fontSize: '0.6rem' }}>[recipe photo]</span>
+          </>
+        )}
         {isAI && <span className="recipe-ai-badge">✦ AI</span>}
       </div>
       <div className="recipe-card-body">

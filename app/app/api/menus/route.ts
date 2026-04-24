@@ -15,6 +15,7 @@ type MenuRow = {
   dietary_tags: string[];
   avg_stars: string | null;
   rating_count: string;
+  thumbnail: string | null;
 };
 
 export async function GET(req: Request) {
@@ -40,13 +41,18 @@ export async function GET(req: Request) {
             mi.category,
             mi.dietary_tags,
             ROUND(AVG(r.stars)::numeric, 2) AS avg_stars,
-            COUNT(r.id)::text AS rating_count
+            COUNT(r.id)::text AS rating_count,
+            latest_img.storage_path AS thumbnail
        FROM menu_items mi
        LEFT JOIN ratings r ON r.menu_item_id = mi.id
+       LEFT JOIN LATERAL (
+         SELECT storage_path FROM menu_item_images
+          WHERE menu_item_id = mi.id ORDER BY created_at DESC LIMIT 1
+       ) latest_img ON true
       WHERE mi.hall_id = $1
         AND mi.date = $2
         AND mi.meal_period = $3::meal_period
-      GROUP BY mi.id
+      GROUP BY mi.id, latest_img.storage_path
       ORDER BY mi.category NULLS LAST, mi.name`,
     [hall, date, period.data],
   );
@@ -63,6 +69,7 @@ export async function GET(req: Request) {
           ? Number(r.avg_stars)
           : null,
       rating_count: count,
+      thumbnail: r.thumbnail ?? null,
     };
   });
 

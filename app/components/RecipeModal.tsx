@@ -1,10 +1,17 @@
 'use client';
 
-import type { Hall, Recipe } from '@/lib/types';
+import { useRef, useState } from 'react';
+import type { Hall, Recipe, RecipeImage } from '@/lib/types';
 import { formatShortDate } from './RecipeCard';
+import { getSupabase } from '@/lib/supabase';
 
 function mealLabel(m: string) {
   return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
+function getPublicUrl(path: string) {
+  const supabase = getSupabase();
+  return supabase.storage.from('menu-images').getPublicUrl(path).data.publicUrl;
 }
 
 export default function RecipeModal({
@@ -12,13 +19,41 @@ export default function RecipeModal({
   hall,
   onClose,
   onFlag,
+  images,
+  onUpload,
 }: {
   recipe: Recipe;
   hall?: Hall;
   onClose: () => void;
   onFlag?: () => void;
+  images?: RecipeImage[];
+  onUpload?: (file: File) => Promise<void>;
 }) {
   const isAI = recipe.source === 'ai';
+  const [imgIdx, setImgIdx] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const hasImages = images && images.length > 0;
+  const currentImg = hasImages ? images[imgIdx] : null;
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !onUpload) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await onUpload(file);
+      setImgIdx(0);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -100,6 +135,73 @@ export default function RecipeModal({
               </li>
             ))}
           </ol>
+
+          {/* Photos section — beneath the last instruction */}
+          <div className="modal-section-label" style={{ marginTop: '1.25rem' }}>
+            Photos
+          </div>
+          {hasImages && (
+            <div className="recipe-modal-photos">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={getPublicUrl(currentImg!.storage_path)}
+                alt={recipe.title}
+              />
+              {images.length > 1 && (
+                <>
+                  <button
+                    className="image-modal-arrow left"
+                    onClick={() => setImgIdx((i) => (i - 1 + images.length) % images.length)}
+                    aria-label="Previous"
+                  >
+                    &#8249;
+                  </button>
+                  <button
+                    className="image-modal-arrow right"
+                    onClick={() => setImgIdx((i) => (i + 1) % images.length)}
+                    aria-label="Next"
+                  >
+                    &#8250;
+                  </button>
+                </>
+              )}
+              {images.length > 1 && (
+                <div className="image-modal-dots">
+                  {images.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`image-modal-dot${i === imgIdx ? ' active' : ''}`}
+                      onClick={() => setImgIdx(i)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {onUpload && (
+            <>
+              <button
+                className="recipe-modal-upload-btn"
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? 'Uploading...' : '+ Upload Photo'}
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleFile}
+              />
+              {uploadError && (
+                <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '0.4rem', textAlign: 'center' }}>
+                  {uploadError}
+                </div>
+              )}
+            </>
+          )}
+
           <div
             style={{
               marginTop: '1.25rem',

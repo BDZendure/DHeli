@@ -33,6 +33,11 @@ export const PostImageBody = z.object({
   storage_path: z.string().min(1).max(500),
 });
 
+export const PostRecipeImageBody = z.object({
+  recipe_id: uuid,
+  storage_path: z.string().min(1).max(500),
+});
+
 export const FlagBody = z.object({
   reason: z.string().max(500).optional(),
 });

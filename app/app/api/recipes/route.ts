@@ -18,6 +18,7 @@ type RecipeRow = {
   meal_period: 'breakfast' | 'lunch' | 'dinner';
   date: string;
   created_at: string;
+  thumbnail: string | null;
 };
 
 export async function GET(req: Request) {
@@ -30,24 +31,29 @@ export async function GET(req: Request) {
   const limitRaw = url.searchParams.get('limit');
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 0, 1), 100) : 100;
 
-  const where: string[] = [`status = 'published'`];
+  const where: string[] = [`r.status = 'published'`];
   const params: unknown[] = [];
   if (hall) {
     params.push(hall);
-    where.push(`hall_id = $${params.length}`);
+    where.push(`r.hall_id = $${params.length}`);
   }
-  if (filter === 'ai') where.push(`source = 'ai'`);
-  if (filter === 'community') where.push(`source = 'user'`);
+  if (filter === 'ai') where.push(`r.source = 'ai'`);
+  if (filter === 'community') where.push(`r.source = 'user'`);
 
   params.push(limit);
   const limitIdx = params.length;
 
   const { rows } = await query<RecipeRow>(
-    `SELECT id, hall_id, source, title, description, ingredients, steps,
-            dietary_tags, prep_time_mins, meal_period, date, created_at
-       FROM recipes
+    `SELECT r.id, r.hall_id, r.source, r.title, r.description, r.ingredients, r.steps,
+            r.dietary_tags, r.prep_time_mins, r.meal_period, r.date, r.created_at,
+            latest_img.storage_path AS thumbnail
+       FROM recipes r
+       LEFT JOIN LATERAL (
+         SELECT storage_path FROM recipe_images
+          WHERE recipe_id = r.id ORDER BY created_at DESC LIMIT 1
+       ) latest_img ON true
       WHERE ${where.join(' AND ')}
-      ORDER BY (source = 'ai') DESC, created_at DESC
+      ORDER BY (r.source = 'ai') DESC, r.created_at DESC
       LIMIT $${limitIdx}`,
     params,
   );

@@ -19,6 +19,7 @@ export type MenuItem = {
   tags: string[];
   avg_stars: number | null;
   rating_count: number;
+  thumbnail: string | null;
 };
 
 export type MenuItemImage = {
@@ -39,5 +40,12 @@ export type Recipe = {
   prep_time_mins: number | null;
   meal_period: MealPeriod;
   date: string;
+  created_at: string;
+  thumbnail: string | null;
+};
+
+export type RecipeImage = {
+  id: string;
+  storage_path: string;
   created_at: string;
 };
